@@ -3,6 +3,7 @@ import numpy as np
 from flask_api_server import APA102, APA102Control
 import pigpio
 import logging
+from signal import pause
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Main")
@@ -52,3 +53,4 @@ if __name__ == "__main__":
         logger.info("Button is pressed")
 
     musical_lights = APA102Control(apa, gpio=BUTTON_GPIO, pi=pi, amplitude_file=output_file, max_amplitude=max_amplitude, callback=button_handler)
+    pause()

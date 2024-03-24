@@ -4,7 +4,7 @@ from flask_restful import Api, reqparse, inputs, Resource
 
 from math import ceil
 from time import sleep
-from collections import deque                                                           # (1)
+from collections import deque                                                 
 from PIL.ImageColor import getrgb
 from luma.core.render import canvas
 from luma.led_matrix.device import apa102
@@ -107,7 +107,7 @@ class APA102Control(Resource):
         self.args_parser.add_argument(
             name = "Rainbow",
             required = True,
-            type = inputs.boolean(),
+            type = inputs.int_range(low=0, high=1),
             help = 'make rainbow effect {error_msg}',
             default=False)
         
@@ -137,8 +137,10 @@ class APA102Control(Resource):
 
 
         self.apa = apa
+        
         APA102.set_color(self.apa, color=self.color)
         APA102.update(self.apa)
+        sleep(3)
 
 
         self.is_polling = False
@@ -167,12 +169,12 @@ class APA102Control(Resource):
         saturation = 100 # 0 (grayer) to 100 (full color)
         brightness = 100 # 0 (darker) to 100 (brighter)
 
-        while(self.rainbow):
-            for hue in tuple(range(0, 360)) + tuple(range(360, -1, -1)): # 0..360..0
-                color_str = "hsb({}, {}%, {}%)".format(hue, saturation, brightness)
-                APA102.set_color(self.apa, color_str)
-                APA102.update(self.apa)
-                sleep(delay_secs)
+        #while(self.rainbow):
+        for hue in tuple(range(0, 360)) + tuple(range(360, -1, -1)): # 0..360..0
+            color_str = "hsb({}, {}%, {}%)".format(hue, saturation, brightness)
+            APA102.set_color(self.apa, color_str)
+            APA102.update(self.apa)
+            sleep(delay_secs)
 
     def post(self):
         args = self.args_parser.parse_args()
@@ -187,17 +189,18 @@ class APA102Control(Resource):
 
     def run(self):
         """ Poll ADC for Voltage Changes """
-        while self.is_polling:                                                           # (1)
+        while self.is_polling:
+            APA102.set_color(self.apa, 'red')                                                           # (1)
             with open(self.amplitude_file, 'r') as f:
                 amplitudes = f.readlines()
                 for amplitude in amplitudes:
-                    APA102.set_contrast((float(amplitude)/self.max_amplitude) * 255)
+                    APA102.set_contrast(self.apa, int((float(amplitude)/self.max_amplitude) * 255))
                     sleep(self.delay_secs)
             
 
         # self.is_polling has become False and the Thread ends.
         self._thread = None
-        logger.debug("Potentiometer Polling Thread Finished.")
+        logger.debug("APA102 Polling Thread Finished.")
 
 
     def _start(self):
@@ -208,13 +211,13 @@ class APA102Control(Resource):
             logger.warn("Polling Thread Already Started.")
             return
 
-        self._thread = threading.Thread(name='Potentiometer',
+        self._thread = threading.Thread(name='flask_api',
                                         target=self.run,
                                         daemon=True)
 
         self.is_polling = True
         self._thread.start()
-        logger.debug("Potentiometer Polling Thread Started.")
+        logger.debug("APA102 Polling Thread Started.")
 
 # Register Flask-RESTful resource and mount to server end point /led
 api.add_resource(APA102Control, '/APA102')

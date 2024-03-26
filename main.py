@@ -1,56 +1,44 @@
 from pydub import AudioSegment
 import numpy as np
-from flask_api_server import APA102, APA102Control
+from flask_api_server import APA102
+from flask_restful import Api
+from flask import Flask, request, render_template
 import pigpio
 import logging
 from signal import pause
+import flask_api_server
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Main")
 
-def song_to_amplitude_intervals(audio_path, interval_duration_ms=250):
-    # Load the song
-    song = AudioSegment.from_mp3(audio_path)
-    
-    # Split the song into chunks of 0.25 seconds
-    interval_duration = interval_duration_ms  # in milliseconds
-    chunks = [song[i:i+interval_duration] for i in range(0, len(song), interval_duration)]
-    
-    # Calculate the average amplitude for each chunk
-    average_amplitudes = []
-    max_amplitude = 0.0
-    for chunk in chunks:
-        # Get the raw audio data as a numpy array
-        samples = np.array(chunk.get_array_of_samples())
-        # Calculate the average amplitude for the chunk
-        avg_amplitude = np.mean(np.abs(samples))
-        if max_amplitude < avg_amplitude:
-            max_amplitude = avg_amplitude
-        average_amplitudes.append(avg_amplitude)
-    
-    return average_amplitudes, max_amplitude
+# Flask & Flask-RESTful instance variables
+app = Flask(__name__, static_url_path='/static', static_folder='static')
+api = Api(app) # Flask-RESTful extension wrapper
 
-def save_amplitudes_to_file(amplitudes, output_file):
-    with open(output_file, 'w') as f:
-        for amplitude in amplitudes:
-            f.write(f"{amplitude}\n")
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index_api_client.html')
+
+apa102 = APA102()
+
+# APA102 Flask-RESTFul Resource setup and registration.
+flask_api_server.set_apa102(apa102)
+api.add_resource(flask_api_server.LightsControl, "/lights")
+api.add_resource(flask_api_server.SongControl, "/song")
 
 
 BUTTON_GPIO = 21
 
 pi = pigpio.pi()
 
+button = flask_api_server.ButtonControl(gpio=BUTTON_GPIO, pi=pi)
 # Example usage
-if __name__ == "__main__":
-    audio_path = 'test-tube-194556.mp3'
-    output_file = 'amplitude_output.txt'
-    amplitudes, max_amplitude = song_to_amplitude_intervals(audio_path)
-    save_amplitudes_to_file(amplitudes, output_file)
+if __name__ == '__main__':
 
-    apa = APA102()
+    # If you have debug=True and receive the error "OSError: [Errno 8] Exec format error", then:
+    # remove the execuition bit on this file from a Terminal, ie:
+    # chmod -x flask_api_server.py
+    #
+    # Flask GitHub Issue: https://github.com/pallets/flask/issues/3189
 
-    def button_handler():
-        logger.info("Button is pressed")
-
-    musical_lights = APA102Control(apa, gpio=BUTTON_GPIO, pi=pi, amplitude_file=output_file, max_amplitude=max_amplitude, callback=button_handler)
-    pause()
+    app.run(host="0.0.0.0", debug=True)

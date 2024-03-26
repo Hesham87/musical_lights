@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibrant TV Frame</title>
+    <style>
+        body {
+        background-image: url('/static/images/Background.png');
+        background-size: cover; /* Cover the entire page */
+        background-position: center; /* Center the background image */
+        background-repeat: no-repeat; /* Do not repeat the image */
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        }
+        .centered-content {
+        text-align: center;
+        }
+        .tv-frame {
+        width: 500px;
+        height: 285px;
+        background: url('/static/images/TV3.png') no-repeat center center; 
+        background-size: cover;
+        box-shadow: 0 0 8px rgba(0,0,0,0.6);
+        border-radius: 15px;
+        transition: box-shadow 0.3s ease;
+        transform: translateY(-22%) translateX(-8%);
+        }
+        .glow-button, .color-picker, .rainbow-button {
+        display: inline-block; /* Allows for better alignment */
+        margin-top: 20px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        transform: translateY(150%) translateX(-58%);
+        }
+        .glow-button {
+        background-color: #f12711; /* Vibrant button color */
+        color: white;
+        }
+        .rainbow-button {
+        background-color: #8A2BE2; /* Vibrant rainbow button color */
+        color: white;
+        }
+        .color-picker {
+        padding: 5px; /* Adjusted padding for the color input */
+        background-color: #fff; /* Background to ensure visibility */
+        border: 1px solid #ddd; /* Subtle border */
+        transform: translateX(158%);
+        }
+        .black-button {
+        background-color: black; /* Button background color */
+        color: white; /* Text color */
+        border: none; /* Removes the default border */
+        padding: 10px 20px; /* Adjusts padding to match other buttons */
+        border-radius: 5px; /* Optional: Matches the border-radius of other buttons */
+        cursor: pointer; /* Changes the mouse cursor to pointer on hover */
+        /* margin-top: 10px; Adds space above the button, adjust as needed */
+        transform: translateY(190%) translateX(-35%);
+        }
+        #audioPlayer {
+        position: absolute;
+        bottom: 100px; /* Adjust this value as needed */
+        left: 40%;
+        /* transform: translateY(50%) translateX(-50%); */
+        display: none; /* Keep your existing display logic */
+        }
+        .music-selector {
+        position: relative;
+        
+        }
+    </style>
+</head>
+<body>
+
+    <div class="centered-content">
+        <div class="tv-frame" id="tvFrame"></div>
+            <input type="color" id="colorPicker" class="color-picker" value="#FFD700">
+            <button class="glow-button" onclick="applyGlow()">Apply Glow</button>
+            <button class="rainbow-button" onclick="toggleRainbowEffect()">Rainbow</button>
+
+            <div class="music-selector">
+                <input type="file" id="songFile" accept=".mp3" style="display: none;" onchange="playSong()">
+                <button onclick="document.getElementById('songFile').click();" class="black-button">MP3 Song</button>
+            </div>
+    </div>
+<audio id="audioPlayer" controls style="display: none;"></audio>
+<script src="/static/jquery.min.js"></script>
+<script type="text/javascript">
+    let isGlowing = false;
+    let rainbowInterval;
+    let hue = 0;
+
+    function getState() {
+        $.get("/led", function(serverResponse, status) {                       // (2)
+           console.log(serverResponse)
+           updateControls(serverResponse)                                      // (3)
+        });
+    }
+
+    function applyGlow() {
+        const tvFrame = document.getElementById('tvFrame');
+        const color = document.getElementById('colorPicker').value;
+        if (isGlowing) {
+        tvFrame.style.boxShadow = `0 0 8px rgba(0,0,0,0.6)`;
+        payload = {"color": 'black', "rainbow": 0};
+        postUpdatelights(payload)
+        } else {
+        tvFrame.style.boxShadow = `0 0 50px 25px ${color}`;
+        payload = {"color": color, "rainbow": 0};
+        postUpdatelights(payload)
+        }
+        isGlowing = !isGlowing;
+    }
+
+    function toggleRainbowEffect() {
+        const tvFrame = document.getElementById('tvFrame');
+        if (rainbowInterval) {
+            clearInterval(rainbowInterval);
+            rainbowInterval = null;
+            tvFrame.style.boxShadow = `0 0 8px rgba(0,0,0,0.6)`; // Reset to default
+            payload = {"color": 'black', "rainbow": 0};
+            postUpdatelights(payload)
+        } else {
+            payload = {"rainbow": 1};
+            postUpdatelights(payload)
+            rainbowInterval = setInterval(() => {
+                tvFrame.style.boxShadow = `0 0 50px 25px hsl(${hue}, 100%, 50%)`;
+                hue = (hue + 1) % 360; // Increase hue, loop back to 0 after reaching 360
+            }, 100); // Update color every 100 milliseconds
+        }
+    }
+
+    function postUpdatelights(payload){
+        $.post("/lights", payload, function(serverResponse, status) {
+            console.log(serverResponse)                                   // (5)
+        });
+    }
+    async function postSong(formData, songFile){
+        try {
+            const response = await $.ajax({
+                url: 'http://localhost:5000/song', // Your endpoint here
+                type: 'POST',
+                data: formData,
+                contentType: false, // Important for multipart/form-data
+                processData: false, // Important for multipart/form-data
+            });
+            
+            // If the request succeeds, this line will be executed after the response is received
+            console.log('File uploaded successfully');
+            console.log(response);
+            audioPlayer.src = URL.createObjectURL(songFile);
+            audioPlayer.load();
+            audioPlayer.play();
+            audioPlayer.style.display = 'block';
+        } catch (error) {
+            // If the request fails, this line will be executed
+            console.error('Upload failed', error);
+            // Handle error
+        }
+        
+        // $.get("/song", function(serverResponse, status) {                       // (2)
+        //    console.log(serverResponse)
+        //    while(!serverResponse.processing_finished){}                    
+        // });
+    }
+
+    function playSong() {
+    const fileInput = document.getElementById('songFile');
+    const audioPlayer = document.getElementById('audioPlayer');
+    
+    if (fileInput.files.length > 0) {
+        const songFile = fileInput.files[0];
+        let formData = new FormData();
+        formData.append("songFile", songFile);
+        postSong(formData, songFile)
+    }
+    }
+</script>
+
+</body>
+</html>
